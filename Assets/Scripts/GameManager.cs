@@ -7,6 +7,15 @@ using UnityEngine.UI;
 using UnityEngine.Networking;
 using Random = UnityEngine.Random;
 
+public class UserPoints
+{
+    public int totalMoney;
+    public List<int> randomNum;
+    public List<int> skeletonRandomNum;
+    public List<int> paylines;
+    public int betBalance;
+}
+
 public class GameManager : MonoBehaviour {
 
     [Header("Text")]
@@ -27,8 +36,14 @@ public class GameManager : MonoBehaviour {
 
     List<int[,]> winningCombinations = new List<int[,]>();
     List<int> winningCombinationLines = new List<int>();
-
-    public static APIForm apiform;
+    public UserPoints user = new UserPoints
+    {
+        totalMoney = 0,
+        randomNum = new List<int>(),
+        skeletonRandomNum = new List<int>(),
+        paylines = new List<int>(),
+        betBalance = 0
+    };
 
     private float _spinTime;
 
@@ -44,45 +59,13 @@ public class GameManager : MonoBehaviour {
 
     public void StartSpin()
     {
-        StartCoroutine(SendSignal());
+        SendSignal();
     }
 
-    private IEnumerator SendSignal()
+    private void SendSignal()
     {
-        WWWForm form = new WWWForm();
-        form.AddField("token", MenuManager.globalVariable._token);
-        form.AddField("totalBet", MenuManager.globalVariable._totalBet);
-        form.AddField("betLine", MenuManager.globalVariable._lines);
-        form.AddField("betValue", MenuManager.globalVariable._bet);
-
-        UnityWebRequest www = UnityWebRequest.Post(MenuManager.globalVariable.BaseUrl + "api/start-signal", form);
-        yield return www.SendWebRequest();
-
-        if (www.result != UnityWebRequest.Result.Success)
-        {
-            _errorAnim.SetBool("error", true);
-            yield return new WaitForSeconds(2f);
-            _errorAnim.SetBool("error", false);
-            GameObject.Find("MenuManager").GetComponent<MenuManager>().setEnableSpin();
-        }
-        else
-        {
-            string strdata = System.Text.Encoding.UTF8.GetString(www.downloadHandler.data);
-            apiform = JsonUtility.FromJson<APIForm>(strdata);
-
-            if (apiform.status == true)
-            {
-                // Spin Start
-                SlotMachineReady();
-            }
-            else
-            {
-                _errorAnim.SetBool("error", true);
-                yield return new WaitForSeconds(2f);
-                _errorAnim.SetBool("error", false);
-                GameObject.Find("MenuManager").GetComponent<MenuManager>().setEnableSpin();
-            }
-        }
+        startSignal();
+        SlotMachineReady();
     }
 
     private IEnumerator Spin()
@@ -118,12 +101,20 @@ public class GameManager : MonoBehaviour {
 
         if(winningCombinationLines.Count > 0)
         {
-            _WinBalance.text = apiform.moneyResult.ToString("$0.00");
+            _WinBalance.text = user.totalMoney.ToString("$0.00");
             _bigWinAnimation.SetActive(true);
-            MenuManager.globalVariable._myBalance += (float)apiform.moneyResult;
+            MenuManager.globalVariable._myBalance += (float)user.totalMoney;
         }
 
         GameObject.Find("MenuManager").GetComponent<MenuManager>().setEnableSpin();
+        user = new UserPoints
+        {
+            totalMoney = 0,
+            randomNum = new List<int>(),
+            skeletonRandomNum = new List<int>(),
+            paylines = new List<int>(),
+            betBalance = 0
+        };
     }
 
     private void SetWinningCombination()
@@ -199,15 +190,14 @@ public class GameManager : MonoBehaviour {
 
         MenuManager.globalVariable._myBalance -= (float)MenuManager.globalVariable._totalBet;
 
-        winningCombinations.Add(new int[,] { { apiform.randomNums[0], apiform.randomNums[1], apiform.randomNums[2], apiform.randomNums[3], apiform.randomNums[4] },
-                                             { apiform.randomNums[5], apiform.randomNums[6], apiform.randomNums[7], apiform.randomNums[8], apiform.randomNums[9] },
-                                             { apiform.randomNums[10], apiform.randomNums[11], apiform.randomNums[12], apiform.randomNums[13], apiform.randomNums[14] }});
+        winningCombinations.Add(new int[,] { { user.skeletonRandomNum[0], user.skeletonRandomNum[1], user.skeletonRandomNum[2], user.skeletonRandomNum[3], user.skeletonRandomNum[4] },
+                                             { user.skeletonRandomNum[5], user.skeletonRandomNum[6], user.skeletonRandomNum[7], user.skeletonRandomNum[8], user.skeletonRandomNum[9] },
+                                             { user.skeletonRandomNum[10], user.skeletonRandomNum[11], user.skeletonRandomNum[12], user.skeletonRandomNum[13], user.skeletonRandomNum[14] }});
 
-        for (int i = 0; i < apiform.winpaylines.Length; i++)
+        for (int i = 0; i < user.paylines.Count; i++)
         {
-            winningCombinationLines.Add(apiform.winpaylines[i]);
+            winningCombinationLines.Add(user.paylines[i]);
         }
-
         StartCoroutine(Spin());
     }
 
@@ -238,5 +228,122 @@ public class GameManager : MonoBehaviour {
             else
                 _payLinesParent.GetChild(i).GetComponent<Button>().interactable = false;
         }
+    }
+
+    private void startSignal()
+    {
+        user.betBalance = MenuManager.globalVariable._bet;
+        CreateRandomNumber();
+        calcMatch();
+    }
+
+    private void CreateRandomNumber()
+    {
+        for(int i = 0; i < 15; i++){
+            int randNum = Random.Range(1,11);
+            user.randomNum.Add(randNum);
+            user.skeletonRandomNum.Add(randNum * -1);
+        }
+    }
+
+    private void calcMatch()
+    {
+        int lines = MenuManager.globalVariable._lines;
+        int[][] numList = new int[][]{
+            new int[]{9,8,7,6,5},
+            new int[]{4,3,2,1,0},
+            new int[]{14,13,12,11,10},
+            new int[]{4,8,12,6,0},
+            new int[]{14,8,2,6,10},
+            new int[]{4,3,7,1,0},
+            new int[]{14,13,7,11,10},
+            new int[]{9,13,12,11,5},
+            new int[]{9,3,2,1,5},
+            new int[]{9,3,7,1,5},
+            new int[]{9,13,7,11,5},
+            new int[]{4,8,2,6,0},
+            new int[]{14,8,12,6,10},
+            new int[]{9,8,2,6,5},
+            new int[]{9,8,12,6,5},
+            new int[]{4,8,7,6,0},
+            new int[]{14,8,2,6,10},
+            new int[]{4,13,2,11,0},
+            new int[]{4,13,12,11,0},
+            new int[]{14,3,2,1,10},
+            new int[]{14,3,12,1,10},
+            new int[]{4,3,12,1,0},
+            new int[]{14,13,2,11,10},
+            new int[]{4,3,7,11,0},
+            new int[]{4,3,7,1,10}
+        };
+        for (int i = 1; i <= lines; i++)
+        {
+            List<int> NumberStack = new List<int>();
+            for (int j = 0; j < 5; j++)
+            {
+                NumberStack.Add(user.randomNum[numList[i-1][j]]);
+            }
+            int money = 0;
+            money = countCheck(NumberStack);
+            if (money > 0)
+            {
+                for (int j = 0; j < 5; j++)
+                {
+                    user.skeletonRandomNum[numList[i-1][j]] = user.randomNum[numList[i-1][j]];
+                }
+                user.paylines.Add(i);
+            }
+            user.totalMoney += money;
+        }
+    }
+
+    private int countCheck(List<int> randomArray)
+    {
+        int setNum = 0;
+        int count = 0;
+        for (int i = 0; i < randomArray.Count; i++)
+        {
+            int count1 = 0;
+            int temp = randomArray[i];
+            for (int j = 0; j < randomArray.Count; j++)
+            {
+                if (temp == randomArray[j] || Math.Abs(temp) == 11)
+                {
+                    count1++;
+                }
+            }
+            if (count1 >= 3)
+            {
+                setNum = randomArray[i];
+                count = count1;
+                break;
+            }
+        }
+        return levelCheck(setNum, count);
+    }
+
+    private int levelCheck(int setNum, int count)
+    {
+        int[] levelPoint1 = new int[]{50, 40, 30, 20, 15, 15, 10, 10, 5, 5};
+        int[] levelPoint2 = new int[]{400, 200, 150, 100, 75, 75, 50, 50, 25, 25};
+        int[] levelPoint3 = new int[]{4000, 2000, 500, 400, 300, 300, 250, 250, 200, 200};
+        if (count == 3)
+        {
+            return levelPoint1[setNum-1] * user.betBalance;
+        } 
+        else if(count == 4 && setNum < 3)
+        {
+            return levelPoint2[setNum-1] * user.betBalance;
+        }
+        else if(count == 400 && setNum > 3)
+        {
+            return levelPoint2[setNum-1] * user.betBalance;
+        }
+        else if(count == 5)
+        {
+            return levelPoint3[setNum-1] * user.betBalance;
+        }
+        else
+            return 0;
     }
 }
